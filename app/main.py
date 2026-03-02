@@ -26,11 +26,12 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI()
 tg_app = Application.builder().token(BOT_TOKEN).build()
 
+
 for h in get_handlers():
     tg_app.add_handler(h)
-    
+
 for h in get_location_handlers():
-tg_app.add_handler(h)
+    tg_app.add_handler(h)
 
 tg_app.add_error_handler(on_error)
 
