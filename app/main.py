@@ -10,6 +10,7 @@ from .handlers.start import get_handlers
 from .handlers.errors import on_error
 
 from .config import BOT_TOKEN, DATABASE_URL, BASE_URL, WEBHOOK_PATH
+from .handlers.locations import get_handlers as get_location_handlers
 
 if not BOT_TOKEN:
     raise RuntimeError("Missing env var BOT_TOKEN")
@@ -27,6 +28,9 @@ tg_app = Application.builder().token(BOT_TOKEN).build()
 
 for h in get_handlers():
     tg_app.add_handler(h)
+    
+for h in get_location_handlers():
+tg_app.add_handler(h)
 
 tg_app.add_error_handler(on_error)
 
