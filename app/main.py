@@ -9,6 +9,13 @@ from .db import engine
 from .handlers.start import get_handlers
 from .handlers.errors import on_error
 
+from .config import BOT_TOKEN, DATABASE_URL, BASE_URL, WEBHOOK_PATH
+
+if not BOT_TOKEN:
+    raise RuntimeError("Missing env var BOT_TOKEN")
+if not DATABASE_URL:
+    raise RuntimeError("Missing env var DATABASE_URL")
+
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("lp_tennisbot")
 
