@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import zoneinfo
+import random
+from ..db import wipe_all_hard
 
 from telegram import Update
 from telegram.ext import (
@@ -33,9 +35,35 @@ from ..repo import (
     payments_sum_between,
 )
 from ..repo import list_pending_requests, list_confirmed_on_day
-
+WIPE_TOKENS: dict[int, str] = {}
 rome = zoneinfo.ZoneInfo(TZ)
 
+async def wipe_all_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_admin(update):
+        return
+    token = f"WIPE-{random.randint(1000, 9999)}"
+    WIPE_TOKENS[ADMIN_ID] = token
+    await update.message.reply_text(
+        "⚠️ ATTENZIONE: questo comando cancella TUTTO (studenti, lezioni, pagamenti, location) e resetta gli ID.\n\n"
+        f"Per confermare, invia:\n/wipe_all_confirm {token}"
+    )
+
+async def wipe_all_confirm_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_admin(update):
+        return
+    if not context.args:
+        await update.message.reply_text("Uso: /wipe_all_confirm <TOKEN>")
+        return
+
+    token = context.args[0].strip()
+    expected = WIPE_TOKENS.get(ADMIN_ID)
+    if not expected or token != expected:
+        await update.message.reply_text("Token non valido o scaduto. Riesegui /wipe_all.")
+        return
+
+    wipe_all_hard()
+    WIPE_TOKENS.pop(ADMIN_ID, None)
+    await update.message.reply_text("💥 Wipe totale completato. Database tornato a tavola bianca.")
 
 def _is_admin(update: Update) -> bool:
     return bool(update.effective_user and update.effective_user.id == ADMIN_ID)
@@ -417,22 +445,6 @@ async def incassi_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total = payments_sum_between(dt_from, dt_to)
     await update.message.reply_text(f"💰 Incassi {period}: {_fmt_eur(total)}")
 
-
-def get_handlers():
-    return [
-        CallbackQueryHandler(on_admin_action, pattern=r"^A\|"),
-        MessageHandler(filters.TEXT & ~filters.COMMAND, on_admin_price_text),
-
-        CommandHandler("studenti", studenti_cmd),
-
-        CommandHandler("paid", paid_cmd),
-        CommandHandler("paidall", paidall_cmd),
-        CommandHandler("crediti", crediti_cmd),
-        CommandHandler("saldo", saldo_cmd),
-        CommandHandler("incassi", incassi_cmd),
-        CommandHandler("pending", pending_cmd),
-        CommandHandler("oggi", oggi_cmd),
-    ]
     
 async def pending_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _is_admin(update):
@@ -470,3 +482,21 @@ async def oggi_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         price = _fmt_eur(lr.price_cents or 0)
         lines.append(f"- {when} | #{lr.id} | {full} | {loc} | {lr.duration_min}m | {price}")
     await update.message.reply_text("\n".join(lines))
+    
+def get_handlers():
+    return [
+        CallbackQueryHandler(on_admin_action, pattern=r"^A\|"),
+        MessageHandler(filters.TEXT & ~filters.COMMAND, on_admin_price_text),
+
+        CommandHandler("studenti", studenti_cmd),
+
+        CommandHandler("paid", paid_cmd),
+        CommandHandler("paidall", paidall_cmd),
+        CommandHandler("crediti", crediti_cmd),
+        CommandHandler("saldo", saldo_cmd),
+        CommandHandler("incassi", incassi_cmd),
+        CommandHandler("pending", pending_cmd),
+        CommandHandler("oggi", oggi_cmd),
+        CommandHandler("wipe_all", wipe_all_cmd),
+        CommandHandler("wipe_all_confirm", wipe_all_confirm_cmd),
+    ]

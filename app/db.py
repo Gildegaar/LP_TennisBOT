@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from .config import DATABASE_URL
+from sqlalchemy import text
 
 def normalize_db_url(url: str) -> str:
     if url.startswith("postgresql://"):
@@ -12,6 +13,8 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 def get_session():
     return SessionLocal()
+    
+
 
 def ensure_schema():
     """
@@ -38,3 +41,20 @@ def ensure_schema():
         """))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payments_user_id ON payments(user_id);"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payments_paid_at ON payments(paid_at);"))
+        
+def wipe_locations_hard() -> None:
+    """
+    Cancella tutte le locations e resetta gli ID (sequence).
+    """
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE locations RESTART IDENTITY;"))
+
+def wipe_all_hard() -> None:
+    """
+    Cancella TUTTO e resetta gli ID.
+    """
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE payments RESTART IDENTITY CASCADE;"))
+        conn.execute(text("TRUNCATE TABLE lesson_requests RESTART IDENTITY CASCADE;"))
+        conn.execute(text("TRUNCATE TABLE locations RESTART IDENTITY CASCADE;"))
+        conn.execute(text("TRUNCATE TABLE users RESTART IDENTITY CASCADE;"))

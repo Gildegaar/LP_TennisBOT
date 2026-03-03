@@ -4,6 +4,8 @@ from telegram.ext import ContextTypes, CommandHandler
 from ..config import ADMIN_ID
 from ..repo import add_location, list_locations, deactivate_location
 from ..repo import activate_location, purge_location, deactivate_all_locations
+from ..repo import count_lesson_requests
+from ..db import wipe_locations_hard
 
 def _is_admin(update: Update) -> bool:
     return bool(update.effective_user and update.effective_user.id == ADMIN_ID)
@@ -42,9 +44,9 @@ async def loc_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     lines = ["📍 Location:"]
-    for l in locs:
+    for idx, l in enumerate(locs, start=1):
         status = "✅" if l.active else "🚫"
-        lines.append(f"{status} {l.id} — {l.name}")
+        lines.append(f"{status} {idx}) {l.name}  (id={l.id})")
     await update.message.reply_text("\n".join(lines))
 
 async def loc_del(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -128,6 +130,25 @@ async def loc_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     n = deactivate_all_locations()
     await update.message.reply_text(f"Reset completato ✅ Location disattivate: {n}")
     
+async def loc_wipe(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat and update.effective_chat.type != "private":
+        await update.message.reply_text("Scrivimi in DM 🙂")
+        return
+    if not _is_admin(update):
+        await update.message.reply_text("Comando riservato all’admin.")
+        return
+
+    n = count_lesson_requests()
+    if n > 0:
+        await update.message.reply_text(
+            f"Non posso fare wipe locations: esistono già {n} lezioni/richieste.\n"
+            "Usa /loc_del per disattivare oppure fai /wipe_all quando sei pronto."
+        )
+        return
+
+    wipe_locations_hard()
+    await update.message.reply_text("💥 Wipe locations completato: tabella svuotata e ID resettati.")
+    
 
 def get_handlers():
     return [
@@ -135,6 +156,7 @@ def get_handlers():
         CommandHandler("loc_list", loc_list),
         CommandHandler("loc_del", loc_del),
         CommandHandler("loc_on", loc_on),
-    CommandHandler("loc_purge", loc_purge),
-    CommandHandler("loc_reset", loc_reset),
+        CommandHandler("loc_purge", loc_purge),
+        CommandHandler("loc_reset", loc_reset),
+        CommandHandler("loc_wipe", loc_wipe),
     ]

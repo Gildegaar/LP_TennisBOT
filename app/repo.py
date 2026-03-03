@@ -11,6 +11,8 @@ from .models import Payment, LessonRequest, User
 from datetime import datetime, timedelta
 import zoneinfo
 from sqlalchemy import desc
+from sqlalchemy import func
+from .models import LessonRequest
 
 
 from .config import TZ
@@ -37,6 +39,11 @@ def upsert_user(telegram_id: int, first_name: str, last_name: str | None, userna
         s.refresh(u)
         return u
         
+
+def count_lesson_requests() -> int:
+    with get_session() as s:
+        return int(s.scalar(select(func.count()).select_from(LessonRequest)) or 0)
+        
 def add_location(name: str) -> Location:
     name = name.strip()
     with get_session() as s:
@@ -51,7 +58,7 @@ def list_locations(active_only: bool = True) -> list[Location]:
         q = select(Location)
         if active_only:
             q = q.where(Location.active == True)  # noqa: E712
-        q = q.order_by(Location.name.asc())
+        q = q.order_by(Location.id.asc())
         return list(s.scalars(q).all())
 
 def deactivate_location(loc_id: int) -> bool:
