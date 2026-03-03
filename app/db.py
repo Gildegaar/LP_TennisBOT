@@ -43,11 +43,8 @@ def ensure_schema():
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payments_paid_at ON payments(paid_at);"))
         
 def wipe_locations_hard() -> None:
-    """
-    Cancella tutte le locations e resetta gli ID (sequence).
-    """
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE locations RESTART IDENTITY;"))
+        conn.execute(text("TRUNCATE TABLE locations RESTART IDENTITY CASCADE;"))
 
 def wipe_all_hard() -> None:
     """
