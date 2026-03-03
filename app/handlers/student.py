@@ -8,7 +8,8 @@ from ..repo import list_locations, get_user_by_telegram_id, create_lesson_reques
 from ..config import TZ, ADMIN_ID
 from ..keyboards import kb_admin_request
 import zoneinfo
-from ..repo import get_location_name
+from ..repo import list_user_requests, get_location_name
+from telegram.ext import CommandHandler
 
 rome = zoneinfo.ZoneInfo(TZ)
 
@@ -36,7 +37,18 @@ async def on_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if q.data == "M|MY":
-        await q.edit_message_text("Arriva tra poco 🙂", reply_markup=kb_main_menu())
+        reqs = list_user_requests(q.from_user.id, limit=10)
+        if not reqs:
+            await q.edit_message_text("Non hai ancora richieste. Premi 📅 Richiedi lezione.", reply_markup=kb_main_menu())
+            return
+
+        lines = ["🗓 Le tue richieste (ultime 10):"]
+        for r in reqs:
+            when = r.start_dt.astimezone(rome).strftime("%a %d/%m %H:%M")
+            loc = get_location_name(r.location_id)
+            price = f" — €{(r.price_cents or 0)/100:.2f}" if (r.status == "CONFIRMED" and r.price_cents) else ""
+            lines.append(f"- #{r.id} | {r.status} | {when} ({r.duration_min}m) | {loc}{price}")
+        await q.edit_message_text("\n".join(lines), reply_markup=kb_main_menu())
         return
 
 async def on_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -89,6 +101,11 @@ async def on_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         draft.duration = int(parts[2])
         STEPS[uid] = "LOC"
         locs = list_locations(active_only=True)
+        if not locs:
+            await q.edit_message_text("⚠️ Nessuna location disponibile. Scrivi all’istruttore per configurarle.", reply_markup=kb_main_menu())
+            STEPS.pop(uid, None)
+            DRAFTS.pop(uid, None)
+            return
         await q.edit_message_text("Seleziona una location:", reply_markup=kb_locations(locs))
         return
 
@@ -178,4 +195,21 @@ def get_handlers():
         CallbackQueryHandler(on_menu, pattern=r"^M\|"),
         CallbackQueryHandler(on_wizard, pattern=r"^W\|"),
         MessageHandler(filters.TEXT & ~filters.COMMAND, on_notes),
+        CommandHandler("skip", skip_note),
     ]
+    
+
+async def skip_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _dm_only(update):
+        return
+    u = update.effective_user
+    if not u:
+        return
+    uid = u.id
+    if STEPS.get(uid) != "NOTES":
+        return
+    if uid not in DRAFTS:
+        DRAFTS[uid] = LessonDraft()
+    DRAFTS[uid].notes = None
+    STEPS[uid] = "REVIEW"
+    await update.message.reply_text(_render_review(DRAFTS[uid]), reply_markup=kb_review())

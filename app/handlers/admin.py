@@ -32,6 +32,7 @@ from ..repo import (
     list_debtors,
     payments_sum_between,
 )
+from ..repo import list_pending_requests, list_confirmed_on_day
 
 rome = zoneinfo.ZoneInfo(TZ)
 
@@ -429,4 +430,43 @@ def get_handlers():
         CommandHandler("crediti", crediti_cmd),
         CommandHandler("saldo", saldo_cmd),
         CommandHandler("incassi", incassi_cmd),
+        CommandHandler("pending", pending_cmd),
+        CommandHandler("oggi", oggi_cmd),
     ]
+    
+async def pending_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_admin(update):
+        return
+
+    rows = list_pending_requests(limit=30)
+    if not rows:
+        await update.message.reply_text("✅ Nessuna richiesta in attesa.")
+        return
+
+    lines = ["⏳ Richieste in attesa:"]
+    for lr, u in rows:
+        when = lr.start_dt.astimezone(rome).strftime("%a %d/%m %H:%M")
+        status = lr.status
+        uname = f"@{u.username}" if u.username else "-"
+        full = f"{u.first_name} {u.last_name or ''}".strip()
+        lines.append(f"- #{lr.id} | {status} | {when} ({lr.duration_min}m) | {full} ({uname})")
+    await update.message.reply_text("\n".join(lines))
+
+async def oggi_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_admin(update):
+        return
+
+    now = datetime.now(tz=rome)
+    rows = list_confirmed_on_day(now)
+    if not rows:
+        await update.message.reply_text("🎾 Oggi: nessuna lezione confermata.")
+        return
+
+    lines = ["🎾 Lezioni confermate di oggi:"]
+    for lr, u in rows:
+        when = lr.start_dt.astimezone(rome).strftime("%H:%M")
+        loc = get_location_name(lr.location_id)
+        full = f"{u.first_name} {u.last_name or ''}".strip()
+        price = _fmt_eur(lr.price_cents or 0)
+        lines.append(f"- {when} | #{lr.id} | {full} | {loc} | {lr.duration_min}m | {price}")
+    await update.message.reply_text("\n".join(lines))

@@ -8,7 +8,14 @@ from .models import LessonRequest, User, Location
 from sqlalchemy import select, func
 from datetime import datetime
 from .models import Payment, LessonRequest, User
+from datetime import datetime, timedelta
+import zoneinfo
+from sqlalchemy import desc
 
+
+from .config import TZ
+from .models import LessonRequest, User, Location
+rome = zoneinfo.ZoneInfo(TZ)
 
 def upsert_user(telegram_id: int, first_name: str, last_name: str | None, username: str | None) -> User:
     with get_session() as s:
@@ -208,3 +215,44 @@ def list_students() -> list[User]:
     with get_session() as s:
         stmt = select(User).order_by(User.first_name.asc())
         return list(s.scalars(stmt).all())
+        
+def list_user_requests(telegram_id: int, limit: int = 10) -> list[LessonRequest]:
+    u = get_user_by_telegram_id(telegram_id)
+    if not u:
+        return []
+    with get_session() as s:
+        stmt = (
+            select(LessonRequest)
+            .where(LessonRequest.user_id == u.id)
+            .order_by(desc(LessonRequest.created_at))
+            .limit(limit)
+        )
+        return list(s.scalars(stmt).all())
+
+def list_pending_requests(limit: int = 20) -> list[tuple[LessonRequest, User]]:
+    with get_session() as s:
+        stmt = (
+            select(LessonRequest, User)
+            .join(User, LessonRequest.user_id == User.id)
+            .where(LessonRequest.status.in_(["PENDING", "AWAITING_PRICE"]))
+            .order_by(LessonRequest.created_at.asc())
+            .limit(limit)
+        )
+        rows = s.execute(stmt).all()
+        return [(r[0], r[1]) for r in rows]
+
+def list_confirmed_on_day(day: datetime) -> list[tuple[LessonRequest, User]]:
+    # day: any dt within the day, tz-aware
+    start = day.astimezone(rome).replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+    with get_session() as s:
+        stmt = (
+            select(LessonRequest, User)
+            .join(User, LessonRequest.user_id == User.id)
+            .where(LessonRequest.status == "CONFIRMED")
+            .where(LessonRequest.start_dt >= start)
+            .where(LessonRequest.start_dt < end)
+            .order_by(LessonRequest.start_dt.asc())
+        )
+        rows = s.execute(stmt).all()
+        return [(r[0], r[1]) for r in rows]
