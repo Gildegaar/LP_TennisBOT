@@ -39,6 +39,77 @@ def upsert_user(telegram_id: int, first_name: str, last_name: str | None, userna
         s.refresh(u)
         return u
         
+def set_proposal(req_id: int, proposed_start_dt, proposed_duration_min: int, proposed_location_id: int) -> bool:
+    with get_session() as s:
+        res = s.execute(
+            text("""
+                UPDATE lesson_requests
+                SET proposed_start_dt = :ps,
+                    proposed_duration_min = :pd,
+                    proposed_location_id = :pl,
+                    status = 'PROPOSED'
+                WHERE id = :id
+            """),
+            {"ps": proposed_start_dt, "pd": proposed_duration_min, "pl": proposed_location_id, "id": req_id},
+        )
+        s.commit()
+        return (res.rowcount or 0) > 0
+
+def apply_proposal(req_id: int) -> bool:
+    with get_session() as s:
+        # Applica solo se proposta completa
+        res = s.execute(
+            text("""
+                UPDATE lesson_requests
+                SET start_dt = proposed_start_dt,
+                    duration_min = proposed_duration_min,
+                    location_id = proposed_location_id,
+                    proposed_start_dt = NULL,
+                    proposed_duration_min = NULL,
+                    proposed_location_id = NULL,
+                    status = 'CONFIRMED'
+                WHERE id = :id
+                  AND proposed_start_dt IS NOT NULL
+                  AND proposed_duration_min IS NOT NULL
+                  AND proposed_location_id IS NOT NULL
+            """),
+            {"id": req_id},
+        )
+        s.commit()
+        return (res.rowcount or 0) > 0
+
+def clear_proposal(req_id: int) -> bool:
+    with get_session() as s:
+        res = s.execute(
+            text("""
+                UPDATE lesson_requests
+                SET proposed_start_dt = NULL,
+                    proposed_duration_min = NULL,
+                    proposed_location_id = NULL,
+                    status = CASE WHEN status = 'PROPOSED' THEN 'CONFIRMED' ELSE status END
+                WHERE id = :id
+            """),
+            {"id": req_id},
+        )
+        s.commit()
+        return (res.rowcount or 0) > 0
+
+def cancel_lesson(req_id: int, reason: str | None = None) -> bool:
+    with get_session() as s:
+        res = s.execute(
+            text("""
+                UPDATE lesson_requests
+                SET status = 'CANCELLED',
+                    cancel_reason = :r,
+                    proposed_start_dt = NULL,
+                    proposed_duration_min = NULL,
+                    proposed_location_id = NULL
+                WHERE id = :id
+            """),
+            {"id": req_id, "r": reason},
+        )
+        s.commit()
+        return (res.rowcount or 0) > 0
 
 def count_lesson_requests() -> int:
     with get_session() as s:

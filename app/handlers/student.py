@@ -1,20 +1,36 @@
 from datetime import datetime
+import zoneinfo
+
 from telegram import Update
-from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters
+from telegram.ext import (
+    ContextTypes,
+    CallbackQueryHandler,
+    MessageHandler,
+    CommandHandler,
+    filters,
+)
 
 from ..states import DRAFTS, STEPS, LessonDraft
 from ..keyboards import kb_dates, kb_times, kb_durations, kb_locations, kb_review, kb_main_menu
-from ..repo import list_locations, get_user_by_telegram_id, create_lesson_request
+from ..repo import (
+    list_locations,
+    get_user_by_telegram_id,
+    create_lesson_request,
+    list_user_requests,
+    get_location_name,
+    apply_proposal,
+    clear_proposal,
+    get_request_with_user,
+)
 from ..config import TZ, ADMIN_ID
 from ..keyboards import kb_admin_request
-import zoneinfo
-from ..repo import list_user_requests, get_location_name
-from telegram.ext import CommandHandler
 
 rome = zoneinfo.ZoneInfo(TZ)
 
+
 def _dm_only(update: Update) -> bool:
     return bool(update.effective_chat and update.effective_chat.type == "private")
+
 
 async def on_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -51,6 +67,7 @@ async def on_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("\n".join(lines), reply_markup=kb_main_menu())
         return
 
+
 async def on_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -74,7 +91,6 @@ async def on_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if step == "BACK":
-        # MVP: semplice back to specific
         target = parts[2]
         STEPS[uid] = target
         if target == "DATE":
@@ -121,7 +137,6 @@ async def on_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if step == "SEND":
-        # validate
         if not (draft.date and draft.time and draft.duration and draft.location_id):
             await q.edit_message_text("Manca qualche campo, riprova.", reply_markup=kb_main_menu())
             return
@@ -157,16 +172,19 @@ async def on_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=ADMIN_ID, text=msg, reply_markup=kb_admin_request(lr.id))
         return
 
+
 def _render_review(draft: LessonDraft) -> str:
+    loc_line = f"{draft.location_id}" if draft.location_id is not None else "-"
     return (
         "📋 Riepilogo richiesta:\n"
         f"- Data: {draft.date}\n"
         f"- Ora: {draft.time}\n"
         f"- Durata: {draft.duration} min\n"
-        f"- Location ID: {draft.location_id}\n"
+        f"- Location: {loc_line}\n"
         f"- Note: {draft.notes or '-'}\n\n"
         "Confermi l’invio?"
     )
+
 
 async def on_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _dm_only(update):
@@ -182,22 +200,10 @@ async def on_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         DRAFTS[uid] = LessonDraft()
 
     text = (update.message.text or "").strip()
-    if text.lower() == "/skip":
-        DRAFTS[uid].notes = None
-    else:
-        DRAFTS[uid].notes = text
-
+    DRAFTS[uid].notes = text if text else None
     STEPS[uid] = "REVIEW"
     await update.message.reply_text(_render_review(DRAFTS[uid]), reply_markup=kb_review())
 
-def get_handlers():
-    return [
-        CallbackQueryHandler(on_menu, pattern=r"^M\|"),
-        CallbackQueryHandler(on_wizard, pattern=r"^W\|"),
-        MessageHandler(filters.TEXT & ~filters.COMMAND, on_notes),
-        CommandHandler("skip", skip_note),
-    ]
-    
 
 async def skip_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _dm_only(update):
@@ -213,3 +219,63 @@ async def skip_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
     DRAFTS[uid].notes = None
     STEPS[uid] = "REVIEW"
     await update.message.reply_text(_render_review(DRAFTS[uid]), reply_markup=kb_review())
+
+
+# -----------------------
+# Student proposal S| (accept/decline)
+# -----------------------
+async def on_student_proposal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+
+    if not _dm_only(update):
+        await q.edit_message_text("Scrivimi in DM 🙂")
+        return
+
+    parts = q.data.split("|")  # S|ACC|id  or S|DEC|id
+    if len(parts) < 3:
+        await q.edit_message_text("Azione non valida.")
+        return
+
+    action = parts[1]
+    req_id = int(parts[2])
+
+    # Basic ownership check: request must belong to this user
+    ru = get_request_with_user(req_id)
+    if not ru:
+        await q.edit_message_text("Richiesta non trovata.")
+        return
+    lr, u = ru
+    if u.telegram_id != q.from_user.id:
+        await q.edit_message_text("Non autorizzato.")
+        return
+
+    if action == "ACC":
+        ok = apply_proposal(req_id)
+        if not ok:
+            await q.edit_message_text("Non riesco ad applicare la proposta (forse è scaduta).")
+            return
+        await q.edit_message_text("✅ Modifica accettata. La lezione è stata aggiornata.")
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f"✅ Lo studente ha ACCETTATO la modifica per lezione #{req_id}.")
+        return
+
+    if action == "DEC":
+        ok = clear_proposal(req_id)
+        if not ok:
+            await q.edit_message_text("Non riesco a rifiutare la proposta (forse è scaduta).")
+            return
+        await q.edit_message_text("❌ Modifica rifiutata. La lezione resta invariata.")
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f"❌ Lo studente ha RIFIUTATO la modifica per lezione #{req_id}.")
+        return
+
+    await q.edit_message_text("Azione non riconosciuta.")
+
+
+def get_handlers():
+    return [
+        CallbackQueryHandler(on_menu, pattern=r"^M\|"),
+        CallbackQueryHandler(on_wizard, pattern=r"^W\|"),
+        CallbackQueryHandler(on_student_proposal, pattern=r"^S\|"),
+        MessageHandler(filters.TEXT & ~filters.COMMAND, on_notes),
+        CommandHandler("skip", skip_note),
+    ]
