@@ -26,6 +26,10 @@ def ensure_schema():
         # lesson_requests: price_cents, currency
         conn.execute(text("ALTER TABLE IF EXISTS lesson_requests ADD COLUMN IF NOT EXISTS price_cents INTEGER NULL;"))
         conn.execute(text("ALTER TABLE IF EXISTS lesson_requests ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'EUR';"))
+        conn.execute(text("ALTER TABLE IF EXISTS lesson_requests ADD COLUMN IF NOT EXISTS proposed_start_dt TIMESTAMPTZ NULL;"))
+        conn.execute(text("ALTER TABLE IF EXISTS lesson_requests ADD COLUMN IF NOT EXISTS proposed_duration_min INTEGER NULL;"))
+        conn.execute(text("ALTER TABLE IF EXISTS lesson_requests ADD COLUMN IF NOT EXISTS proposed_location_id INTEGER NULL;"))
+        conn.execute(text("ALTER TABLE IF EXISTS lesson_requests ADD COLUMN IF NOT EXISTS cancel_reason TEXT NULL;"))
 
         # payments table
         conn.execute(text("""

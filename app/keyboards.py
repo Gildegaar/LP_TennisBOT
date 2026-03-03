@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+
 def kb_main_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📅 Richiedi lezione", callback_data="M|REQ")],
@@ -62,3 +63,58 @@ def kb_price(req_id: int):
     rows.append([InlineKeyboardButton("✍️ Altro…", callback_data=f"A|PO|{req_id}")])
     rows.append([InlineKeyboardButton("↩️ Annulla", callback_data=f"A|PCANCEL|{req_id}")])
     return InlineKeyboardMarkup(rows)
+    
+
+def kb_admin_manage(req_id: int):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✏️ Modifica", callback_data=f"A|EDIT|{req_id}"),
+            InlineKeyboardButton("🗑 Annulla", callback_data=f"A|CANCEL|{req_id}")
+        ]
+    ])
+
+def kb_edit_dates(req_id: int, days: int = 14):
+    rows = []
+    today = date.today()
+    for i in range(days):
+        d = today + timedelta(days=i)
+        label = d.strftime("%a %d/%m")
+        rows.append([InlineKeyboardButton(label, callback_data=f"E|DATE|{req_id}|{d.isoformat()}")])
+    rows.append([InlineKeyboardButton("↩️ Annulla", callback_data=f"E|ABORT|{req_id}")])
+    return InlineKeyboardMarkup(rows)
+
+def kb_edit_times(req_id: int):
+    times = ["09:00","10:00","11:00","12:00","15:00","16:00","17:00","18:00","19:00"]
+    rows = [[InlineKeyboardButton(t, callback_data=f"E|TIME|{req_id}|{t}")] for t in times]
+    rows.append([InlineKeyboardButton("↩️ Indietro", callback_data=f"E|BACK|{req_id}|DATE")])
+    rows.append([InlineKeyboardButton("↩️ Annulla", callback_data=f"E|ABORT|{req_id}")])
+    return InlineKeyboardMarkup(rows)
+
+def kb_edit_durations(req_id: int):
+    rows = [
+        [InlineKeyboardButton("60 min", callback_data=f"E|DUR|{req_id}|60")],
+        [InlineKeyboardButton("90 min", callback_data=f"E|DUR|{req_id}|90")],
+    ]
+    rows.append([InlineKeyboardButton("↩️ Indietro", callback_data=f"E|BACK|{req_id}|TIME")])
+    rows.append([InlineKeyboardButton("↩️ Annulla", callback_data=f"E|ABORT|{req_id}")])
+    return InlineKeyboardMarkup(rows)
+
+def kb_edit_locations(req_id: int, locs):
+    rows = [[InlineKeyboardButton(l.name, callback_data=f"E|LOC|{req_id}|{l.id}")] for l in locs]
+    rows.append([InlineKeyboardButton("↩️ Indietro", callback_data=f"E|BACK|{req_id}|DUR")])
+    rows.append([InlineKeyboardButton("↩️ Annulla", callback_data=f"E|ABORT|{req_id}")])
+    return InlineKeyboardMarkup(rows)
+
+def kb_send_proposal(req_id: int):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📨 Invia proposta", callback_data=f"E|SEND|{req_id}|1")],
+        [InlineKeyboardButton("↩️ Annulla", callback_data=f"E|ABORT|{req_id}")],
+    ])
+
+def kb_student_proposal(req_id: int):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Accetto", callback_data=f"S|ACC|{req_id}"),
+            InlineKeyboardButton("❌ Rifiuto", callback_data=f"S|DEC|{req_id}")
+        ]
+    ])
