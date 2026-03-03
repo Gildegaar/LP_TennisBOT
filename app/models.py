@@ -1,6 +1,7 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import BigInteger, String, DateTime, func
 from sqlalchemy import Boolean
+from sqlalchemy import ForeignKey, Integer, Text
 
 class Base(DeclarativeBase):
     pass
@@ -22,3 +23,21 @@ class Location(Base):
     name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    
+ 
+class LessonRequest(Base):
+    __tablename__ = "lesson_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+
+    start_dt: Mapped[DateTime] = mapped_column(DateTime(timezone=True), index=True)
+    duration_min: Mapped[int] = mapped_column(Integer)
+
+    location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"), index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True)
+
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

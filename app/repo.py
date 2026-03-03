@@ -3,6 +3,8 @@ from .models import User
 from .db import get_session
 from sqlalchemy import delete
 from .models import Location
+from datetime import datetime
+from .models import LessonRequest, User, Location
 
 
 def upsert_user(telegram_id: int, first_name: str, last_name: str | None, username: str | None) -> User:
@@ -50,3 +52,39 @@ def deactivate_location(loc_id: int) -> bool:
         loc.active = False
         s.commit()
         return True
+        
+def get_user_by_telegram_id(telegram_id: int) -> User | None:
+    with get_session() as s:
+        return s.scalar(select(User).where(User.telegram_id == telegram_id))
+
+def get_location(loc_id: int) -> Location | None:
+    with get_session() as s:
+        return s.get(Location, loc_id)
+
+def create_lesson_request(user_id: int, start_dt: datetime, duration_min: int, location_id: int, notes: str | None) -> LessonRequest:
+    with get_session() as s:
+        lr = LessonRequest(
+            user_id=user_id,
+            start_dt=start_dt,
+            duration_min=duration_min,
+            location_id=location_id,
+            notes=notes,
+            status="PENDING",
+        )
+        s.add(lr)
+        s.commit()
+        s.refresh(lr)
+        return lr
+
+def set_request_status(req_id: int, status: str) -> bool:
+    with get_session() as s:
+        lr = s.get(LessonRequest, req_id)
+        if not lr:
+            return False
+        lr.status = status
+        s.commit()
+        return True
+
+def get_request(req_id: int) -> LessonRequest | None:
+    with get_session() as s:
+        return s.get(LessonRequest, req_id)

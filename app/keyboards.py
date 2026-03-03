@@ -1,0 +1,53 @@
+from datetime import date, timedelta
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+def kb_main_menu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📅 Richiedi lezione", callback_data="M|REQ")],
+        [InlineKeyboardButton("🗓 Le mie richieste", callback_data="M|MY")],
+    ])
+
+def kb_dates(days: int = 14):
+    rows = []
+    today = date.today()
+    for i in range(days):
+        d = today + timedelta(days=i)
+        label = d.strftime("%a %d/%m")
+        rows.append([InlineKeyboardButton(label, callback_data=f"W|DATE|{d.isoformat()}")])
+    rows.append([InlineKeyboardButton("↩️ Menu", callback_data="M|HOME")])
+    return InlineKeyboardMarkup(rows)
+
+def kb_times():
+    # MVP: slot fissi, poi li rendiamo configurabili
+    times = ["09:00","10:00","11:00","12:00","15:00","16:00","17:00","18:00","19:00"]
+    rows = [[InlineKeyboardButton(t, callback_data=f"W|TIME|{t}")] for t in times]
+    rows.append([InlineKeyboardButton("↩️ Indietro", callback_data="W|BACK|DATE")])
+    return InlineKeyboardMarkup(rows)
+
+def kb_durations():
+    rows = [
+        [InlineKeyboardButton("60 min", callback_data="W|DUR|60")],
+        [InlineKeyboardButton("90 min", callback_data="W|DUR|90")],
+    ]
+    rows.append([InlineKeyboardButton("↩️ Indietro", callback_data="W|BACK|TIME")])
+    return InlineKeyboardMarkup(rows)
+
+def kb_locations(locs):
+    rows = [[InlineKeyboardButton(l.name, callback_data=f"W|LOC|{l.id}")] for l in locs]
+    rows.append([InlineKeyboardButton("↩️ Indietro", callback_data="W|BACK|DUR")])
+    return InlineKeyboardMarkup(rows)
+
+def kb_review():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Invia richiesta", callback_data="W|SEND|1")],
+        [InlineKeyboardButton("✏️ Aggiungi nota", callback_data="W|NOTE|1")],
+        [InlineKeyboardButton("↩️ Annulla", callback_data="W|CANCEL|1")],
+    ])
+
+def kb_admin_request(req_id: int):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Conferma", callback_data=f"A|CONF|{req_id}"),
+            InlineKeyboardButton("❌ Rifiuta", callback_data=f"A|REJ|{req_id}")
+        ]
+    ])

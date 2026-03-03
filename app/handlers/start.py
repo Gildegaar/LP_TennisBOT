@@ -1,6 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 from ..repo import upsert_user
+from ..keyboards import kb_main_menu
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat and update.effective_chat.type != "private":
@@ -30,3 +31,8 @@ def get_handlers():
         CommandHandler("start", start),
         CommandHandler("whoami", whoami),
     ]
+    
+await update.message.reply_text(
+    "Ciao! Sono LP_TennisBot.\n\nScegli un’opzione:",
+    reply_markup=kb_main_menu()
+)
