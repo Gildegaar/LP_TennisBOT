@@ -5,6 +5,9 @@ from sqlalchemy import delete
 from .models import Location
 from datetime import datetime
 from .models import LessonRequest, User, Location
+from sqlalchemy import select, func
+from datetime import datetime
+from .models import Payment, LessonRequest, User
 
 
 def upsert_user(telegram_id: int, first_name: str, last_name: str | None, username: str | None) -> User:
@@ -88,3 +91,110 @@ def set_request_status(req_id: int, status: str) -> bool:
 def get_request(req_id: int) -> LessonRequest | None:
     with get_session() as s:
         return s.get(LessonRequest, req_id)
+        
+def get_user_by_username(username: str) -> User | None:
+    username = username.lstrip("@")
+    with get_session() as s:
+        return s.scalar(select(User).where(User.username == username))
+
+def get_user_by_telegram_id(telegram_id: int) -> User | None:
+    with get_session() as s:
+        return s.scalar(select(User).where(User.telegram_id == telegram_id))
+
+def get_request_with_user(req_id: int) -> tuple[LessonRequest, User] | None:
+    with get_session() as s:
+        stmt = (
+            select(LessonRequest, User)
+            .join(User, LessonRequest.user_id == User.id)
+            .where(LessonRequest.id == req_id)
+        )
+        row = s.execute(stmt).first()
+        if not row:
+            return None
+        return row[0], row[1]
+
+def set_request_status(req_id: int, status: str) -> bool:
+    with get_session() as s:
+        lr = s.get(LessonRequest, req_id)
+        if not lr:
+            return False
+        lr.status = status
+        s.commit()
+        return True
+
+def set_request_price_and_confirm(req_id: int, price_cents: int) -> bool:
+    with get_session() as s:
+        lr = s.get(LessonRequest, req_id)
+        if not lr:
+            return False
+        lr.price_cents = price_cents
+        lr.currency = "EUR"
+        lr.status = "CONFIRMED"
+        s.commit()
+        return True
+
+def create_payment(user_id: int, amount_cents: int, note: str | None = None, method: str | None = None) -> Payment:
+    with get_session() as s:
+        p = Payment(user_id=user_id, amount_cents=amount_cents, currency="EUR", note=note, method=method)
+        s.add(p)
+        s.commit()
+        s.refresh(p)
+        return p
+
+def student_totals(user_id: int) -> tuple[int, int, int]:
+    """
+    returns: (lessons_total_cents, payments_total_cents, balance_cents)
+    balance > 0 => ti devono soldi
+    """
+    with get_session() as s:
+        lessons_total = s.scalar(
+            select(func.coalesce(func.sum(LessonRequest.price_cents), 0))
+            .where(LessonRequest.user_id == user_id)
+            .where(LessonRequest.status == "CONFIRMED")
+        ) or 0
+
+        payments_total = s.scalar(
+            select(func.coalesce(func.sum(Payment.amount_cents), 0))
+            .where(Payment.user_id == user_id)
+        ) or 0
+
+        balance = int(lessons_total) - int(payments_total)
+        return int(lessons_total), int(payments_total), balance
+
+def list_debtors() -> list[tuple[User, int]]:
+    """
+    returns list of (User, balance_cents) where balance > 0
+    """
+    with get_session() as s:
+        # aggregate lessons
+        lessons = (
+            select(LessonRequest.user_id, func.coalesce(func.sum(LessonRequest.price_cents), 0).label("lt"))
+            .where(LessonRequest.status == "CONFIRMED")
+            .group_by(LessonRequest.user_id)
+            .subquery()
+        )
+        # aggregate payments
+        pays = (
+            select(Payment.user_id, func.coalesce(func.sum(Payment.amount_cents), 0).label("pt"))
+            .group_by(Payment.user_id)
+            .subquery()
+        )
+
+        stmt = (
+            select(User, (lessons.c.lt - func.coalesce(pays.c.pt, 0)).label("bal"))
+            .join(lessons, lessons.c.user_id == User.id)
+            .outerjoin(pays, pays.c.user_id == User.id)
+            .where((lessons.c.lt - func.coalesce(pays.c.pt, 0)) > 0)
+            .order_by((lessons.c.lt - func.coalesce(pays.c.pt, 0)).desc())
+        )
+        rows = s.execute(stmt).all()
+        return [(r[0], int(r[1])) for r in rows]
+
+def payments_sum_between(dt_from: datetime, dt_to: datetime) -> int:
+    with get_session() as s:
+        total = s.scalar(
+            select(func.coalesce(func.sum(Payment.amount_cents), 0))
+            .where(Payment.paid_at >= dt_from)
+            .where(Payment.paid_at < dt_to)
+        ) or 0
+        return int(total)

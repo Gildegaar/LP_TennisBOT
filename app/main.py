@@ -2,16 +2,15 @@ import logging
 from fastapi import FastAPI, Request
 from telegram.ext import Application
 from telegram import Update
-
+from .db import engine, ensure_schema
+ensure_schema()
+Base.metadata.create_all(bind=engine)
 from .config import BOT_TOKEN, BASE_URL, WEBHOOK_PATH
 from .models import Base
-from .db import engine
 from .handlers.start import get_handlers
 from .handlers.errors import on_error
-
 from .config import BOT_TOKEN, DATABASE_URL, BASE_URL, WEBHOOK_PATH
 from .handlers.locations import get_handlers as get_location_handlers
-
 from .handlers.student import get_handlers as get_student_handlers
 from .handlers.admin import get_handlers as get_admin_handlers
 

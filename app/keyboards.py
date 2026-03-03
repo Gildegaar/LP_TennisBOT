@@ -51,3 +51,14 @@ def kb_admin_request(req_id: int):
             InlineKeyboardButton("❌ Rifiuta", callback_data=f"A|REJ|{req_id}")
         ]
     ])
+    
+
+def kb_price(req_id: int):
+    # preset in euro
+    presets = [20, 25, 30, 35, 40]
+    rows = []
+    for p in presets:
+        rows.append([InlineKeyboardButton(f"€{p}", callback_data=f"A|P|{req_id}|{p}")])
+    rows.append([InlineKeyboardButton("✍️ Altro…", callback_data=f"A|PO|{req_id}")])
+    rows.append([InlineKeyboardButton("↩️ Annulla", callback_data=f"A|PCANCEL|{req_id}")])
+    return InlineKeyboardMarkup(rows)
