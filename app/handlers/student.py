@@ -8,6 +8,7 @@ from ..repo import list_locations, get_user_by_telegram_id, create_lesson_reques
 from ..config import TZ, ADMIN_ID
 from ..keyboards import kb_admin_request
 import zoneinfo
+from ..repo import get_location_name
 
 rome = zoneinfo.ZoneInfo(TZ)
 
@@ -128,10 +129,12 @@ async def on_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(f"Richiesta inviata ✅ (ID {lr.id})\nTi confermo appena possibile.", reply_markup=kb_main_menu())
 
         # notify admin
+        loc_name = get_location_name(lr.location_id)
         msg = (
             f"🎾 Nuova richiesta (#{lr.id})\n"
             f"Da: {q.from_user.full_name} (@{q.from_user.username or '-'})\n"
             f"Quando: {dt.strftime('%a %d/%m/%Y %H:%M')} ({lr.duration_min} min)\n"
+            f"Dove: {loc_name}\n"
             f"Note: {lr.notes or '-'}"
         )
         await context.bot.send_message(chat_id=ADMIN_ID, text=msg, reply_markup=kb_admin_request(lr.id))

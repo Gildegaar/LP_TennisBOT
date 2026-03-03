@@ -198,3 +198,13 @@ def payments_sum_between(dt_from: datetime, dt_to: datetime) -> int:
             .where(Payment.paid_at < dt_to)
         ) or 0
         return int(total)
+        
+def get_location_name(location_id: int) -> str:
+    with get_session() as s:
+        loc = s.get(Location, location_id)
+        return loc.name if loc else f"Location {location_id}"
+
+def list_students() -> list[User]:
+    with get_session() as s:
+        stmt = select(User).order_by(User.first_name.asc())
+        return list(s.scalars(stmt).all())

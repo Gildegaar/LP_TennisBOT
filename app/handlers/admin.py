@@ -1,8 +1,9 @@
 from datetime import datetime
 import zoneinfo
-
+from ..repo import list_students
 from telegram import Update
 from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters, CommandHandler
+from ..repo import get_location_name
 
 from ..config import ADMIN_ID, TZ
 from ..states import ADMIN_PENDING_PRICE
@@ -88,6 +89,11 @@ async def on_admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text("Richiesta non trovata.")
             return
         lr, u = ru
+        when = lr.start_dt.astimezone(rome).strftime("%a %d/%m/%Y %H:%M")
+        loc_name = get_location_name(lr.location_id)
+        dur = lr.duration_min
+        msg = f"🎾 Lezione confermata ✅\nQuando: {when}\nDurata: {dur} min\nDove: {loc_name}\nPrezzo: {_fmt_eur(cents)}"
+        await context.bot.send_message(chat_id=u.telegram_id, text=msg)
 
         set_request_price_and_confirm(req_id, cents)
         await q.edit_message_text(f"✅ Prezzo impostato: €{euro} — richiesta #{req_id} confermata definitivamente.")
@@ -134,6 +140,11 @@ async def on_admin_price_text(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     lr, u = ru
+    when = lr.start_dt.astimezone(rome).strftime("%a %d/%m/%Y %H:%M")
+    loc_name = get_location_name(lr.location_id)
+    dur = lr.duration_min
+    msg = f"🎾 Lezione confermata ✅\nQuando: {when}\nDurata: {dur} min\nDove: {loc_name}\nPrezzo: {_fmt_eur(cents)}"
+await context.bot.send_message(chat_id=u.telegram_id, text=msg)
     set_request_price_and_confirm(req_id, cents)
     ADMIN_PENDING_PRICE.pop(ADMIN_ID, None)
 
@@ -306,4 +317,20 @@ def get_handlers():
         CommandHandler("crediti", crediti_cmd),
         CommandHandler("saldo", saldo_cmd),
         CommandHandler("incassi", incassi_cmd),
+        CommandHandler("studenti", studenti_cmd),
     ]
+    
+async def studenti_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_admin(update):
+        return
+
+    students = list_students()
+    if not students:
+        await update.message.reply_text("Nessuno studente registrato ancora.")
+        return
+
+    lines = ["👥 Studenti registrati:"]
+    for u in students:
+        uname = f"@{u.username}" if u.username else "-"
+        lines.append(f"- {u.first_name} {u.last_name or ''} | {uname} | tg_id: {u.telegram_id}")
+    await update.message.reply_text("\n".join(lines))
