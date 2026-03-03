@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from .models import User
 from .db import get_session
-from sqlalchemy import delete
+from sqlalchemy import update, delete
 from .models import Location
 from datetime import datetime
 from .models import LessonRequest, User, Location
@@ -256,3 +256,29 @@ def list_confirmed_on_day(day: datetime) -> list[tuple[LessonRequest, User]]:
         )
         rows = s.execute(stmt).all()
         return [(r[0], r[1]) for r in rows]
+        
+from sqlalchemy import update, delete
+
+def activate_location(loc_id: int) -> bool:
+    with get_session() as s:
+        loc = s.get(Location, loc_id)
+        if not loc:
+            return False
+        loc.active = True
+        s.commit()
+        return True
+
+def purge_location(loc_id: int) -> bool:
+    with get_session() as s:
+        loc = s.get(Location, loc_id)
+        if not loc:
+            return False
+        s.delete(loc)
+        s.commit()
+        return True
+
+def deactivate_all_locations() -> int:
+    with get_session() as s:
+        res = s.execute(update(Location).values(active=False))
+        s.commit()
+        return res.rowcount or 0
