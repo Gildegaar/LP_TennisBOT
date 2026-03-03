@@ -138,6 +138,9 @@ async def loc_wipe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Comando riservato all’admin.")
         return
 
+    # Debug/ack immediato: così sai che il comando è arrivato
+    await update.message.reply_text("🧹 Avvio wipe locations...")
+
     n = count_lesson_requests()
     if n > 0:
         await update.message.reply_text(
@@ -146,7 +149,15 @@ async def loc_wipe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    wipe_locations_hard()
+    try:
+        wipe_locations_hard()
+    except Exception as e:
+        await update.message.reply_text(
+            "❌ Wipe locations fallito (errore DB).\n"
+            f"Dettaglio: {type(e).__name__}: {e}"
+        )
+        return
+
     await update.message.reply_text("💥 Wipe locations completato: tabella svuotata e ID resettati.")
     
 
