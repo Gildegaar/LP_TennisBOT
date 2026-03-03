@@ -1,0 +1,33 @@
+STUDENT_HELP = (
+    "🎾 *Benvenuto!*\n\n"
+    "Questo bot serve per richiedere lezioni di tennis.\n\n"
+    "✅ *Come funziona*\n"
+    "1) Premi *📅 Richiedi lezione*\n"
+    "2) Seleziona *data*, *orario*, *durata* e *location*\n"
+    "3) Invia la richiesta\n\n"
+    "📌 Puoi vedere lo stato con *🗓 Le mie richieste*.\n"
+    "Quando confermo, riceverai un messaggio con prezzo e dettagli.\n"
+)
+
+ADMIN_HELP = (
+    "🛠 *Comandi admin*\n\n"
+    "📍 Location:\n"
+    "/loc_add <nome>\n"
+    "/loc_list\n"
+    "/loc_del <id>\n"
+    "/loc_on <id>\n"
+    "/loc_purge <id>\n"
+    "/loc_wipe\n\n"
+    "📋 Gestione:\n"
+    "/pending\n"
+    "/oggi\n"
+    "/studenti\n\n"
+    "💶 Contabilità:\n"
+    "/paid <@username|telegram_id> <importo> [nota]\n"
+    "/paidall <@username|telegram_id> [nota]\n"
+    "/crediti\n"
+    "/saldo <@username|telegram_id>\n"
+    "/incassi oggi|settimana|mese|anno\n\n"
+    "💥 Reset:\n"
+    "/wipe_all (conferma a token)\n"
+)
