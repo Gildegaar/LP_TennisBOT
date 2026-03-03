@@ -11,3 +11,4 @@ class LessonDraft:
 
 DRAFTS: dict[int, LessonDraft] = {}   # key: telegram_id
 STEPS: dict[int, str] = {}           # key: telegram_id -> "DATE|TIME|DUR|LOC|NOTES|REVIEW"
+ADMIN_PENDING_PRICE: dict[int, int] = {}  # admin_telegram_id -> req_id
