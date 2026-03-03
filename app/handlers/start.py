@@ -21,6 +21,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Comandi utili:\n"
         "/whoami - mostra il tuo Telegram ID\n"
     )
+    
+    await update.message.reply_text(
+    "Ciao! Sono LP_TennisBot.\n\nScegli un’opzione:",
+    reply_markup=kb_main_menu()
+)
 
 async def whoami(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user:
@@ -32,7 +37,3 @@ def get_handlers():
         CommandHandler("whoami", whoami),
     ]
     
-await update.message.reply_text(
-    "Ciao! Sono LP_TennisBot.\n\nScegli un’opzione:",
-    reply_markup=kb_main_menu()
-)
