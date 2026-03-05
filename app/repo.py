@@ -360,3 +360,16 @@ def deactivate_all_locations() -> int:
         res = s.execute(update(Location).values(active=False))
         s.commit()
         return res.rowcount or 0
+        
+def list_confirmed_between(dt_from: datetime, dt_to: datetime) -> list[tuple[LessonRequest, User]]:
+    with get_session() as s:
+        stmt = (
+            select(LessonRequest, User)
+            .join(User, LessonRequest.user_id == User.id)
+            .where(LessonRequest.status == "CONFIRMED")
+            .where(LessonRequest.start_dt >= dt_from)
+            .where(LessonRequest.start_dt < dt_to)
+            .order_by(LessonRequest.start_dt.asc())
+        )
+        rows = s.execute(stmt).all()
+        return [(r[0], r[1]) for r in rows]

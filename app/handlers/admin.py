@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ..repo import list_confirmed_between
 
 from datetime import datetime, timedelta
 import random
@@ -688,6 +689,81 @@ async def setprice_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_message(chat_id=ADMIN_ID, text=f"🧾 Gestione lezione #{req_id}", reply_markup=kb_admin_manage(req_id))
 
+async def lezioni_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_admin(update):
+        return
+
+    # Uso:
+    # /lezioni              -> prossimi 7 giorni
+    # /lezioni 14           -> prossimi 14 giorni
+    # /lezioni 2026-03-07   -> quel giorno
+    # /lezioni 2026-03-07 2026-03-14 -> range
+    args = context.args
+
+    now = datetime.now(tz=rome)
+
+    def day_start(d: datetime) -> datetime:
+        return d.astimezone(rome).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    try:
+        if not args:
+            dt_from = now
+            dt_to = now + timedelta(days=7)
+
+        elif len(args) == 1 and args[0].isdigit():
+            days = int(args[0])
+            if days <= 0 or days > 60:
+                await update.message.reply_text("Giorni non valido. Usa un numero tra 1 e 60.")
+                return
+            dt_from = now
+            dt_to = now + timedelta(days=days)
+
+        elif len(args) == 1:
+            # single date
+            d = datetime.fromisoformat(args[0]).replace(tzinfo=rome)
+            dt_from = day_start(d)
+            dt_to = dt_from + timedelta(days=1)
+
+        else:
+            d1 = datetime.fromisoformat(args[0]).replace(tzinfo=rome)
+            d2 = datetime.fromisoformat(args[1]).replace(tzinfo=rome)
+            dt_from = day_start(d1)
+            dt_to = day_start(d2) + timedelta(days=1)
+            if dt_to <= dt_from:
+                await update.message.reply_text("Range non valido: la seconda data deve essere >= prima data.")
+                return
+
+    except ValueError:
+        await update.message.reply_text("Formato data non valido. Usa YYYY-MM-DD (es. 2026-03-07).")
+        return
+
+    rows = list_confirmed_between(dt_from, dt_to)
+    if not rows:
+        await update.message.reply_text("📭 Nessuna lezione confermata nel periodo selezionato.")
+        return
+
+    # raggruppo per giorno + totale
+    lines = []
+    total_cents = 0
+    current_day = None
+
+    for lr, u in rows:
+        dt = lr.start_dt.astimezone(rome)
+        day_key = dt.strftime("%Y-%m-%d")
+        if day_key != current_day:
+            current_day = day_key
+            lines.append(f"\n📅 {dt.strftime('%a %d/%m/%Y')}")
+        when = dt.strftime("%H:%M")
+        loc = get_location_name(lr.location_id)
+        full = f"{u.first_name} {u.last_name or ''}".strip()
+        price_c = int(lr.price_cents or 0)
+        total_cents += price_c
+        price = _fmt_eur(price_c)
+        lines.append(f"- {when} | #{lr.id} | {full} | {loc} | {lr.duration_min}m | {price}")
+
+    lines.append(f"\nΣ Totale periodo: {_fmt_eur(total_cents)}")
+    await update.message.reply_text("\n".join(lines).strip())
+
 def get_handlers():
     return [
         CallbackQueryHandler(on_admin_action, pattern=r"^A\|"),
@@ -708,4 +784,5 @@ def get_handlers():
         CommandHandler("wipe_all", wipe_all_cmd),
         CommandHandler("wipe_all_confirm", wipe_all_confirm_cmd),
         CommandHandler("setprice", setprice_cmd),
+        CommandHandler("lezioni", lezioni_cmd),
     ]
