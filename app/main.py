@@ -30,8 +30,19 @@ app = FastAPI()
 tg_app = Application.builder().token(BOT_TOKEN).build()
 
 # Register handlers ONCE
-for h in (get_start_handlers() + get_location_handlers() + get_student_handlers() + get_admin_handlers()):
-    tg_app.add_handler(h)
+# Group 0 (priorità alta): start, locations, admin
+for h in get_start_handlers():
+    tg_app.add_handler(h, group=0)
+
+for h in get_location_handlers():
+    tg_app.add_handler(h, group=0)
+
+for h in get_admin_handlers():
+    tg_app.add_handler(h, group=0)
+
+# Group 1 (priorità più bassa): student wizard + note handler
+for h in get_student_handlers():
+    tg_app.add_handler(h, group=1)
 
 tg_app.add_error_handler(on_error)
 
