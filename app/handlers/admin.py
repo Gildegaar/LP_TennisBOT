@@ -637,6 +637,56 @@ async def oggi_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"- {when} | #{lr.id} | {full} | {loc} | {lr.duration_min}m | {price}")
     await update.message.reply_text("\n".join(lines))
 
+async def setprice_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_admin(update):
+        return
+
+    if len(context.args) < 2:
+        await update.message.reply_text("Uso: /setprice <lesson_id> <importo>")
+        return
+
+    try:
+        req_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("lesson_id non valido.")
+        return
+
+    cents = _parse_amount_to_cents(context.args[1])
+    if cents is None:
+        await update.message.reply_text("Importo non valido. Esempio: /setprice 1 15")
+        return
+
+    ru = get_request_with_user(req_id)
+    if not ru:
+        await update.message.reply_text("Richiesta non trovata.")
+        return
+
+    lr, u = ru
+    ok = set_request_price_and_confirm(req_id, cents)
+    if not ok:
+        await update.message.reply_text("Errore salvataggio prezzo.")
+        return
+
+    when = lr.start_dt.astimezone(rome).strftime("%a %d/%m/%Y %H:%M")
+    loc_name = get_location_name(lr.location_id)
+    dur = lr.duration_min
+
+    await update.message.reply_text(f"✅ Prezzo impostato: {_fmt_eur(cents)} — richiesta #{req_id} confermata.")
+    try:
+        await context.bot.send_message(
+            chat_id=u.telegram_id,
+            text=(
+                "🎾 Lezione confermata ✅\n"
+                f"Quando: {when}\n"
+                f"Durata: {dur} min\n"
+                f"Dove: {loc_name}\n"
+                f"Prezzo: {_fmt_eur(cents)}"
+            ),
+        )
+    except Exception:
+        pass
+
+    await context.bot.send_message(chat_id=ADMIN_ID, text=f"🧾 Gestione lezione #{req_id}", reply_markup=kb_admin_manage(req_id))
 
 def get_handlers():
     return [
@@ -657,4 +707,5 @@ def get_handlers():
 
         CommandHandler("wipe_all", wipe_all_cmd),
         CommandHandler("wipe_all_confirm", wipe_all_confirm_cmd),
+        CommandHandler("setprice", setprice_cmd),
     ]
