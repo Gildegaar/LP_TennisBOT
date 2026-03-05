@@ -361,58 +361,56 @@ async def on_admin_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if action == "SEND":
-       
 
+        # -----------------------
+        # TEXT: admin enters custom price
+        # -----------------------
+        async def on_admin_price_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            if not _is_admin(update):
+                return
+            if update.effective_chat and update.effective_chat.type != "private":
+                return
 
-    # -----------------------
-    # TEXT: admin enters custom price
-    # -----------------------
-    async def on_admin_price_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not _is_admin(update):
-            return
-        if update.effective_chat and update.effective_chat.type != "private":
-            return
+            req_id = ADMIN_PENDING_PRICE.get(ADMIN_ID)
+            if not req_id:
+                return
 
-        req_id = ADMIN_PENDING_PRICE.get(ADMIN_ID)
-        if not req_id:
-            return
+            cents = _parse_amount_to_cents((update.message.text or "").strip())
+            if cents is None:
+                await update.message.reply_text("Importo non valido. Scrivi un numero tipo 25 o 27,50.")
+                return
 
-        cents = _parse_amount_to_cents((update.message.text or "").strip())
-        if cents is None:
-            await update.message.reply_text("Importo non valido. Scrivi un numero tipo 25 o 27,50.")
-            return
+            ru = get_request_with_user(req_id)
+            if not ru:
+                ADMIN_PENDING_PRICE.pop(ADMIN_ID, None)
+                await update.message.reply_text("Richiesta non trovata.")
+                return
 
-        ru = get_request_with_user(req_id)
-        if not ru:
+            lr, u = ru
+            ok = set_request_price_and_confirm(req_id, cents)
             ADMIN_PENDING_PRICE.pop(ADMIN_ID, None)
-            await update.message.reply_text("Richiesta non trovata.")
-            return
 
-        lr, u = ru
-        ok = set_request_price_and_confirm(req_id, cents)
-        ADMIN_PENDING_PRICE.pop(ADMIN_ID, None)
+            if not ok:
+                await update.message.reply_text("Errore salvataggio prezzo.")
+                return
 
-        if not ok:
-            await update.message.reply_text("Errore salvataggio prezzo.")
-            return
+            when = lr.start_dt.astimezone(rome).strftime("%a %d/%m/%Y %H:%M")
+            loc_name = get_location_name(lr.location_id)
+            dur = lr.duration_min
+            msg = (
+                "🎾 Lezione confermata ✅\n"
+                f"Quando: {when}\n"
+                f"Durata: {dur} min\n"
+                f"Dove: {loc_name}\n"
+                f"Prezzo: {_fmt_eur(cents)}"
+            )
+            try:
+                await context.bot.send_message(chat_id=u.telegram_id, text=msg)
+            except Exception:
+                pass
 
-        when = lr.start_dt.astimezone(rome).strftime("%a %d/%m/%Y %H:%M")
-        loc_name = get_location_name(lr.location_id)
-        dur = lr.duration_min
-        msg = (
-            "🎾 Lezione confermata ✅\n"
-            f"Quando: {when}\n"
-            f"Durata: {dur} min\n"
-            f"Dove: {loc_name}\n"
-            f"Prezzo: {_fmt_eur(cents)}"
-        )
-        try:
-            await context.bot.send_message(chat_id=u.telegram_id, text=msg)
-        except Exception:
-            pass
-
-        await update.message.reply_text(f"✅ Prezzo impostato: {_fmt_eur(cents)} — richiesta #{req_id} confermata.")
-        await context.bot.send_message(chat_id=ADMIN_ID, text=f"🧾 Gestione lezione #{req_id}", reply_markup=kb_admin_manage(req_id))
+            await update.message.reply_text(f"✅ Prezzo impostato: {_fmt_eur(cents)} — richiesta #{req_id} confermata.")
+            await context.bot.send_message(chat_id=ADMIN_ID, text=f"🧾 Gestione lezione #{req_id}", reply_markup=kb_admin_manage(req_id))
 
 
 # -----------------------
