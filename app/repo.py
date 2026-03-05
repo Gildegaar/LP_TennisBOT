@@ -13,6 +13,7 @@ import zoneinfo
 from sqlalchemy import desc
 from sqlalchemy import func
 from .models import LessonRequest
+from sqlalchemy import text
 
 
 from .config import TZ
