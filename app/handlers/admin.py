@@ -26,6 +26,8 @@ from ..keyboards import (
     kb_edit_locations,
     kb_send_proposal,
     kb_student_proposal,
+    kb_manage_lessons_entry,
+    kb_manage_lessons_list,
 )
 
 from ..repo import (
@@ -58,6 +60,7 @@ from ..repo import (
     list_pending_requests,
     list_confirmed_on_day,
     list_confirmed_between,
+    list_upcoming_confirmed,
 )
 
 rome = zoneinfo.ZoneInfo(TZ)
@@ -764,13 +767,60 @@ async def lezioni_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"- {when} | #{lr.id} | {full} | {loc} | {lr.duration_min}m | {_fmt_eur(price_c)}")
 
     lines.append(f"\nΣ Totale periodo: {_fmt_eur(total_cents)}")
-    await update.message.reply_text("\n".join(lines).strip())
+    await update.message.reply_text("\n".join(lines).strip(), reply_markup=kb_manage_lessons_entry(14))
+
+async def on_manage_lessons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+
+    if not _is_admin(update):
+        await q.edit_message_text("Non autorizzato.")
+        return
+
+    parts = q.data.split("|")
+    # G|OPEN|days
+    # G|SEL|id
+    # G|CLOSE|1
+    action = parts[1]
+
+    if action == "CLOSE":
+        await q.edit_message_reply_markup(reply_markup=None)
+        return
+
+    if action == "OPEN":
+        days = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 14
+        rows = list_upcoming_confirmed(days=days, limit=30)
+        if not rows:
+            await q.edit_message_text("📭 Nessuna lezione confermata nel periodo selezionato.")
+            return
+
+        items = []
+        for lr, u in rows:
+            dt = lr.start_dt.astimezone(rome)
+            when = dt.strftime("%a %d/%m %H:%M")
+            loc = get_location_name(lr.location_id)
+            full = f"{u.first_name} {u.last_name or ''}".strip()
+            items.append({"id": lr.id, "label": f"{when} — {full} — {loc}"})
+
+        await q.edit_message_text("Seleziona una lezione da gestire:", reply_markup=kb_manage_lessons_list(items))
+        return
+
+    if action == "SEL":
+        req_id = int(parts[2])
+        # manda scheda gestione (riusa il sistema esistente)
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"🧾 Gestione lezione #{req_id}",
+            reply_markup=kb_admin_manage(req_id),
+        )
+        return
 
 
 def get_handlers():
     return [
         CallbackQueryHandler(on_admin_action, pattern=r"^A\|"),
         CallbackQueryHandler(on_admin_edit, pattern=r"^E\|"),
+        CallbackQueryHandler(on_manage_lessons, pattern=r"^G\|"),
         MessageHandler(filters.TEXT & ~filters.COMMAND, on_admin_price_text),
 
         CommandHandler("setprice", setprice_cmd),
@@ -789,4 +839,5 @@ def get_handlers():
 
         CommandHandler("wipe_all", wipe_all_cmd),
         CommandHandler("wipe_all_confirm", wipe_all_confirm_cmd),
+        
     ]

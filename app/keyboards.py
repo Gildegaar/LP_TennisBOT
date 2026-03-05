@@ -56,7 +56,7 @@ def kb_admin_request(req_id: int):
 
 def kb_price(req_id: int):
     # preset in euro
-    presets = [20, 25, 30, 35, 40]
+    presets = [15, 20, 25, 30, 40, 50]
     rows = []
     for p in presets:
         rows.append([InlineKeyboardButton(f"€{p}", callback_data=f"A|P|{req_id}|{p}")])
@@ -118,3 +118,17 @@ def kb_student_proposal(req_id: int):
             InlineKeyboardButton("❌ Rifiuto", callback_data=f"S|DEC|{req_id}")
         ]
     ])
+    
+def kb_manage_lessons_entry(days: int = 14):
+    # Bottone per aprire elenco gestibile (range standard)
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🛠 Gestisci lezioni", callback_data=f"G|OPEN|{days}")]
+    ])
+
+def kb_manage_lessons_list(rows):
+    """
+    rows: list of dict {id, label}
+    """
+    buttons = [[InlineKeyboardButton(r["label"], callback_data=f"G|SEL|{r['id']}")] for r in rows]
+    buttons.append([InlineKeyboardButton("❌ Chiudi", callback_data="G|CLOSE|1")])
+    return InlineKeyboardMarkup(buttons)
