@@ -237,26 +237,40 @@ async def on_admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if action == "CANCEL":
+        await q.edit_message_text(f"🗑 Annullamento lezione #{req_id} in corso...")
+
         ru = get_request_with_user(req_id)
         if not ru:
-            await q.edit_message_text("Richiesta/lezione non trovata.")
+            await context.bot.send_message(chat_id=ADMIN_ID, text="Richiesta/lezione non trovata.")
             return
         lr, u = ru
 
-        ok = cancel_lesson(req_id, reason=None)
-        if not ok:
-            await q.edit_message_text("Errore annullamento.")
+        try:
+            ok = cancel_lesson(req_id, reason=None)
+        except Exception as e:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"❌ Errore DB durante annullamento: {type(e).__name__}: {e}",
+            )
+            # rimanda comunque scheda gestione
+            await context.bot.send_message(chat_id=ADMIN_ID, text=f"🧾 Gestione lezione #{req_id}", reply_markup=kb_admin_manage(req_id))
             return
 
-        await q.edit_message_text(f"🗑 Lezione #{req_id} annullata.")
+        if not ok:
+            await context.bot.send_message(chat_id=ADMIN_ID, text="❌ Errore annullamento (ok=False).")
+            await context.bot.send_message(chat_id=ADMIN_ID, text=f"🧾 Gestione lezione #{req_id}", reply_markup=kb_admin_manage(req_id))
+            return
+
+        # notifica studente
         try:
             await context.bot.send_message(
                 chat_id=u.telegram_id,
                 text="🗑 La lezione è stata annullata dall’istruttore. Se vuoi, invia una nuova richiesta.",
             )
         except Exception:
-            pass
+            await context.bot.send_message(chat_id=ADMIN_ID, text="⚠️ Non riesco a contattare lo studente in DM.")
 
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f"✅ Lezione #{req_id} annullata.")
         await context.bot.send_message(chat_id=ADMIN_ID, text=f"🧾 Gestione lezione #{req_id}", reply_markup=kb_admin_manage(req_id))
         return
 
