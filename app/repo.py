@@ -373,3 +373,20 @@ def list_confirmed_between(dt_from: datetime, dt_to: datetime) -> list[tuple[Les
         )
         rows = s.execute(stmt).all()
         return [(r[0], r[1]) for r in rows]
+        
+def list_upcoming_confirmed(days: int = 14, limit: int = 30) -> list[tuple[LessonRequest, User]]:
+    now = datetime.now(tz=rome)
+    dt_from = now
+    dt_to = now + timedelta(days=days)
+    with get_session() as s:
+        stmt = (
+            select(LessonRequest, User)
+            .join(User, LessonRequest.user_id == User.id)
+            .where(LessonRequest.status == "CONFIRMED")
+            .where(LessonRequest.start_dt >= dt_from)
+            .where(LessonRequest.start_dt < dt_to)
+            .order_by(LessonRequest.start_dt.asc())
+            .limit(limit)
+        )
+        rows = s.execute(stmt).all()
+        return [(r[0], r[1]) for r in rows]
