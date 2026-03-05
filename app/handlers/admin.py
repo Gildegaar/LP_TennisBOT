@@ -307,8 +307,21 @@ async def on_admin_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         draft = ADMIN_EDIT[ADMIN_ID]
 
     if action == "ABORT":
+        # Se per qualche motivo la lezione era finita in PROPOSED, la riportiamo a CONFIRMED
+        try:
+            clear_proposal(req_id)
+        except Exception:
+            pass
+
         ADMIN_EDIT.pop(ADMIN_ID, None)
+
         await q.edit_message_text(f"Modifica annullata per #{req_id}.")
+        # Rimanda una scheda gestione così non perdi i tastini
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"🧾 Gestione lezione #{req_id}",
+            reply_markup=kb_admin_manage(req_id),
+        )
         return
 
     if action == "BACK":
@@ -348,97 +361,58 @@ async def on_admin_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if action == "SEND":
-        # validate
-        if not (draft.get("date") and draft.get("time") and draft.get("dur") and draft.get("loc_id")):
-            await q.edit_message_text("Manca qualcosa nella proposta. Riparti con ✏️ Modifica.")
-            ADMIN_EDIT.pop(ADMIN_ID, None)
+       
+
+
+    # -----------------------
+    # TEXT: admin enters custom price
+    # -----------------------
+    async def on_admin_price_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not _is_admin(update):
+            return
+        if update.effective_chat and update.effective_chat.type != "private":
+            return
+
+        req_id = ADMIN_PENDING_PRICE.get(ADMIN_ID)
+        if not req_id:
+            return
+
+        cents = _parse_amount_to_cents((update.message.text or "").strip())
+        if cents is None:
+            await update.message.reply_text("Importo non valido. Scrivi un numero tipo 25 o 27,50.")
             return
 
         ru = get_request_with_user(req_id)
         if not ru:
-            await q.edit_message_text("Richiesta/lezione non trovata.")
-            ADMIN_EDIT.pop(ADMIN_ID, None)
+            ADMIN_PENDING_PRICE.pop(ADMIN_ID, None)
+            await update.message.reply_text("Richiesta non trovata.")
             return
 
         lr, u = ru
-        dt = datetime.fromisoformat(f"{draft['date']}T{draft['time']}:00").replace(tzinfo=rome)
-        ok = set_proposal(req_id, dt, int(draft["dur"]), int(draft["loc_id"]))
-        ADMIN_EDIT.pop(ADMIN_ID, None)
+        ok = set_request_price_and_confirm(req_id, cents)
+        ADMIN_PENDING_PRICE.pop(ADMIN_ID, None)
 
         if not ok:
-            await q.edit_message_text("Errore nel salvataggio proposta.")
+            await update.message.reply_text("Errore salvataggio prezzo.")
             return
 
-        when = dt.astimezone(rome).strftime("%a %d/%m/%Y %H:%M")
-        loc_name = get_location_name(int(draft["loc_id"]))
+        when = lr.start_dt.astimezone(rome).strftime("%a %d/%m/%Y %H:%M")
+        loc_name = get_location_name(lr.location_id)
+        dur = lr.duration_min
         msg = (
-            "✏️ Proposta modifica lezione\n"
-            f"Nuovo orario: {when}\n"
-            f"Durata: {draft['dur']} min\n"
-            f"Dove: {loc_name}\n\n"
-            "Accetti la modifica?"
+            "🎾 Lezione confermata ✅\n"
+            f"Quando: {when}\n"
+            f"Durata: {dur} min\n"
+            f"Dove: {loc_name}\n"
+            f"Prezzo: {_fmt_eur(cents)}"
         )
-
-        await q.edit_message_text(f"📨 Proposta inviata allo studente per lezione #{req_id}.")
-
         try:
-            await context.bot.send_message(chat_id=u.telegram_id, text=msg, reply_markup=kb_student_proposal(req_id))
+            await context.bot.send_message(chat_id=u.telegram_id, text=msg)
         except Exception:
-            await context.bot.send_message(chat_id=ADMIN_ID, text="⚠️ Non riesco a contattare lo studente in DM (forse non ha avviato il bot).")
-        return
+            pass
 
-    await q.edit_message_text("Azione edit non riconosciuta.")
-
-
-# -----------------------
-# TEXT: admin enters custom price
-# -----------------------
-async def on_admin_price_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not _is_admin(update):
-        return
-    if update.effective_chat and update.effective_chat.type != "private":
-        return
-
-    req_id = ADMIN_PENDING_PRICE.get(ADMIN_ID)
-    if not req_id:
-        return
-
-    cents = _parse_amount_to_cents((update.message.text or "").strip())
-    if cents is None:
-        await update.message.reply_text("Importo non valido. Scrivi un numero tipo 25 o 27,50.")
-        return
-
-    ru = get_request_with_user(req_id)
-    if not ru:
-        ADMIN_PENDING_PRICE.pop(ADMIN_ID, None)
-        await update.message.reply_text("Richiesta non trovata.")
-        return
-
-    lr, u = ru
-    ok = set_request_price_and_confirm(req_id, cents)
-    ADMIN_PENDING_PRICE.pop(ADMIN_ID, None)
-
-    if not ok:
-        await update.message.reply_text("Errore salvataggio prezzo.")
-        return
-
-    when = lr.start_dt.astimezone(rome).strftime("%a %d/%m/%Y %H:%M")
-    loc_name = get_location_name(lr.location_id)
-    dur = lr.duration_min
-    msg = (
-        "🎾 Lezione confermata ✅\n"
-        f"Quando: {when}\n"
-        f"Durata: {dur} min\n"
-        f"Dove: {loc_name}\n"
-        f"Prezzo: {_fmt_eur(cents)}"
-    )
-    try:
-        await context.bot.send_message(chat_id=u.telegram_id, text=msg)
-    except Exception:
-        pass
-
-    await update.message.reply_text(f"✅ Prezzo impostato: {_fmt_eur(cents)} — richiesta #{req_id} confermata.")
-    await context.bot.send_message(chat_id=ADMIN_ID, text=f"🧾 Gestione lezione #{req_id}", reply_markup=kb_admin_manage(req_id))
+        await update.message.reply_text(f"✅ Prezzo impostato: {_fmt_eur(cents)} — richiesta #{req_id} confermata.")
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f"🧾 Gestione lezione #{req_id}", reply_markup=kb_admin_manage(req_id))
 
 
 # -----------------------
